@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "linear-mcp"
-version = "0.1.0"
+version = "0.2.0"
 description = "Linear MCP server for Claude Code"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -16,8 +16,24 @@ dependencies = [
     "python-dotenv>=1.0.0",
 ]
 
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "pytest-mock>=3.14",
+    "ruff>=0.4",
+]
+
 [project.scripts]
 linear-mcp = "linear_mcp.server:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/linear_mcp"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I"]
