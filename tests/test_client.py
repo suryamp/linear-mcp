@@ -933,3 +933,53 @@ class TestMarkNotificationRead:
         )
         with pytest.raises(LinearError, match="success=false"):
             c.mark_notification_read("n1")
+
+
+# ── transition_issue ──────────────────────────────────────────────────────────
+
+def _states_resp(*names: str) -> MagicMock:
+    nodes = [{"id": f"s{i}", "name": n, "type": "started", "color": "#000", "position": i}
+             for i, n in enumerate(names)]
+    return make_response({"workflowStates": {"nodes": nodes}})
+
+
+class TestTransitionIssue:
+    def test_resolves_state_name_to_id_and_updates(self, client):
+        c, http = client
+        http.post.side_effect = [
+            _states_resp("Todo", "In Progress", "Done"),
+            make_response({"issueUpdate": {"success": True, "issue": _issue_stub(state={"name": "In Progress"})}}),
+        ]
+        result = c.transition_issue("i1", "In Progress", team_id="team-1")
+        assert result["state"]["name"] == "In Progress"
+        update_payload = http.post.call_args_list[1][1]["json"]
+        assert update_payload["variables"]["input"] == {"stateId": "s1"}
+
+    def test_state_name_matching_is_case_insensitive(self, client):
+        c, http = client
+        http.post.side_effect = [
+            _states_resp("In Progress"),
+            make_response({"issueUpdate": {"success": True, "issue": _issue_stub()}}),
+        ]
+        c.transition_issue("i1", "in progress", team_id="team-1")
+        update_payload = http.post.call_args_list[1][1]["json"]
+        assert update_payload["variables"]["input"]["stateId"] == "s0"
+
+    def test_raises_with_available_states_when_name_not_found(self, client):
+        c, http = client
+        http.post.return_value = _states_resp("Todo", "Done")
+        with pytest.raises(ValueError, match="Todo"):
+            c.transition_issue("i1", "Nonexistent", team_id="team-1")
+
+    def test_fetches_team_id_from_issue_when_omitted(self, client):
+        c, http = client
+        http.post.side_effect = [
+            make_response({"issue": {"team": {"id": "team-99"}}}),
+            _states_resp("Done"),
+            make_response({"issueUpdate": {"success": True, "issue": _issue_stub()}}),
+        ]
+        c.transition_issue("i1", "Done")
+        team_query_payload = http.post.call_args_list[0][1]["json"]
+        assert "team" in team_query_payload["query"]
+        states_payload = http.post.call_args_list[1][1]["json"]
+        assert states_payload["variables"]["teamId"] == "team-99"

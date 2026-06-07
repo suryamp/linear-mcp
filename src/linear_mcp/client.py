@@ -331,6 +331,20 @@ class LinearClient:
 
         return self._update_issue_fields(issue_id, input_data)
 
+    def transition_issue(self, issue_id: str, state_name: str, team_id: str | None = None) -> dict:
+        if team_id is None:
+            data = self._query(
+                "query($id: String!) { issue(id: $id) { team { id } } }",
+                {"id": issue_id},
+            )
+            team_id = data["issue"]["team"]["id"]
+        states = self.list_workflow_states(team_id)
+        match = next((s for s in states if s["name"].lower() == state_name.lower()), None)
+        if match is None:
+            available = [s["name"] for s in states]
+            raise ValueError(f"No workflow state {state_name!r}. Available: {available}")
+        return self._update_issue_fields(issue_id, {"stateId": match["id"]})
+
     def unassign_issue(self, issue_id: str) -> dict:
         """Remove the assignee from an issue (set to unassigned)."""
         return self._update_issue_fields(issue_id, {"assigneeId": None})

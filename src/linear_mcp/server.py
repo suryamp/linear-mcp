@@ -232,6 +232,19 @@ def update_issue(
 
 
 @mcp.tool()
+def transition_issue(issue_id: str, state_name: str, team_id: str = None) -> dict:
+    """Move an issue to a named workflow state without needing the state UUID.
+    If team_id is omitted it is fetched from the issue automatically (one extra API call).
+
+    Args:
+        issue_id: Issue UUID or identifier like 'ENG-42'.
+        state_name: Workflow state name, e.g. 'In Progress'. Case-insensitive.
+        team_id: Team UUID (use list_teams to find it). Optional — fetched from the issue if omitted.
+    """
+    return _client().transition_issue(issue_id, state_name, team_id)
+
+
+@mcp.tool()
 def unassign_issue(issue_id: str) -> dict:
     """Remove the assignee from an issue, leaving it unassigned.
     Use update_issue to change the assignee to someone else.
