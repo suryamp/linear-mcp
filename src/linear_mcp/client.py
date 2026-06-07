@@ -109,7 +109,7 @@ class LinearClient:
 
     def list_members(self, team_id: str) -> list[dict]:
         data = self._query("""
-            query($teamId: String!) {
+            query($teamId: ID!) {
                 team(id: $teamId) {
                     members(first: 500) {
                         nodes { id name email displayName }
@@ -126,7 +126,7 @@ class LinearClient:
 
     def list_workflow_states(self, team_id: str) -> list[dict]:
         data = self._query("""
-            query($teamId: String!) {
+            query($teamId: ID!) {
                 workflowStates(
                     filter: { team: { id: { eq: $teamId } } }
                     first: 250
@@ -188,7 +188,7 @@ class LinearClient:
 
     def get_issue(self, issue_id: str) -> dict:
         data = self._query("""
-            query($id: String!) {
+            query($id: ID!) {
                 issue(id: $id) {
                     id identifier title description priority dueDate
                     state    { name }
@@ -280,7 +280,7 @@ class LinearClient:
         if not input_data:
             raise ValueError("_update_issue_fields called with empty input_data")
         data = self._query("""
-            mutation($id: String!, $input: IssueUpdateInput!) {
+            mutation($id: ID!, $input: IssueUpdateInput!) {
                 issueUpdate(id: $id, input: $input) {
                     success
                     issue {
@@ -334,7 +334,7 @@ class LinearClient:
     def transition_issue(self, issue_id: str, state_name: str, team_id: str | None = None) -> dict:
         if team_id is None:
             data = self._query(
-                "query($id: String!) { issue(id: $id) { team { id } } }",
+                "query($id: ID!) { issue(id: $id) { team { id } } }",
                 {"id": issue_id},
             )
             team_id = data["issue"]["team"]["id"]
@@ -351,7 +351,7 @@ class LinearClient:
 
     def archive_issue(self, issue_id: str) -> bool:
         data = self._query("""
-            mutation($id: String!) {
+            mutation($id: ID!) {
                 issueArchive(id: $id) { success }
             }
         """, {"id": issue_id})
@@ -359,7 +359,7 @@ class LinearClient:
 
     def delete_issue(self, issue_id: str) -> bool:
         data = self._query("""
-            mutation($id: String!) {
+            mutation($id: ID!) {
                 issueDelete(id: $id) { success }
             }
         """, {"id": issue_id})
@@ -389,7 +389,7 @@ class LinearClient:
 
     def delete_issue_relation(self, relation_id: str) -> bool:
         data = self._query("""
-            mutation($id: String!) {
+            mutation($id: ID!) {
                 issueRelationDelete(id: $id) { success }
             }
         """, {"id": relation_id})
@@ -455,7 +455,7 @@ class LinearClient:
 
     def list_cycles(self, team_id: str, limit: int = 20) -> list[dict]:
         data = self._query("""
-            query($teamId: String!, $first: Int!) {
+            query($teamId: ID!, $first: Int!) {
                 team(id: $teamId) {
                     cycles(first: $first) {
                         nodes {
@@ -505,7 +505,7 @@ class LinearClient:
 
     def _get_issue_label_ids(self, issue_id: str) -> list[str]:
         data = self._query("""
-            query($id: String!) {
+            query($id: ID!) {
                 issue(id: $id) {
                     labels { nodes { id } }
                 }
@@ -575,7 +575,7 @@ class LinearClient:
     def mark_notification_read(self, notification_id: str) -> dict:
         read_at = datetime.now(timezone.utc).isoformat()
         data = self._query("""
-            mutation($id: String!, $input: NotificationUpdateInput!) {
+            mutation($id: ID!, $input: NotificationUpdateInput!) {
                 notificationUpdate(id: $id, input: $input) {
                     success
                     notification { id readAt }
