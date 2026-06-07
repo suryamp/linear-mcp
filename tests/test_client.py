@@ -234,6 +234,22 @@ class TestRateLimiting:
             with pytest.raises(LinearError, match="Rate limited"):
                 c.get_viewer()
 
+    def test_http_date_retry_after_falls_back_to_5(self, client):
+        """RFC 7231 allows Retry-After to be an HTTP-date string; int() crashes on it."""
+        c, http = client
+        rate_limited = MagicMock()
+        rate_limited.status_code = 429
+        rate_limited.is_success = False
+        rate_limited.headers = {"Retry-After": "Mon, 01 Jun 2026 00:00:00 GMT"}
+        success = make_response({"viewer": {"id": "u1", "name": "A", "email": "a@x.com"}})
+        http.post.side_effect = [rate_limited, success]
+
+        with patch("linear_mcp.client.time.sleep") as mock_sleep:
+            result = c.get_viewer()
+
+        mock_sleep.assert_called_once_with(5)
+        assert result["id"] == "u1"
+
 
 # ── List issues ───────────────────────────────────────────────────────────────
 
@@ -439,6 +455,23 @@ class TestUpdateIssue:
         c.update_issue("i1", due_date="2026-07-01")
         payload = http.post.call_args[1]["json"]
         assert payload["variables"]["input"]["dueDate"] == "2026-07-01"
+
+    def test_due_date_empty_string_sends_null(self, client):
+        """due_date='' must send dueDate: null to clear the field, not skip it."""
+        c, http = client
+        http.post.return_value = make_response({"issueUpdate": {"success": True, "issue": _issue_stub()}})
+        c.update_issue("i1", due_date="")
+        payload = http.post.call_args[1]["json"]
+        assert "dueDate" in payload["variables"]["input"]
+        assert payload["variables"]["input"]["dueDate"] is None
+
+    def test_due_date_none_omits_field(self, client):
+        """due_date=None (the default) must leave dueDate out of the payload entirely."""
+        c, http = client
+        http.post.return_value = make_response({"issueUpdate": {"success": True, "issue": _issue_stub()}})
+        c.update_issue("i1", title="X")
+        payload = http.post.call_args[1]["json"]
+        assert "dueDate" not in payload["variables"]["input"]
 
     def test_raises_on_success_false(self, client):
         c, http = client
@@ -682,6 +715,15 @@ class TestGetCurrentCycle:
         http.post.return_value = make_response({"team": {"cycles": {"nodes": []}}})
         assert c.get_current_cycle("team-1") is None
 
+    def test_fetches_200_cycles_to_cover_mature_teams(self, client):
+        """get_current_cycle must request 200 cycles, not the default 20, so teams
+        with a long history don't miss their active sprint."""
+        c, http = client
+        http.post.return_value = make_response({"team": {"cycles": {"nodes": []}}})
+        c.get_current_cycle("team-1")
+        payload = http.post.call_args[1]["json"]
+        assert payload["variables"]["first"] == 200
+
 
 # ── Cycle membership ──────────────────────────────────────────────────────────
 
@@ -716,12 +758,49 @@ class TestRemoveIssueFromCycle:
         assert payload["variables"]["input"] == {"cycleId": None}
 
 
+# ── _get_issue_label_ids (internal) ──────────────────────────────────────────
+
+class TestGetIssueLabelIds:
+    def test_returns_label_ids(self, client):
+        c, http = client
+        http.post.return_value = make_response({
+            "issue": {"labels": {"nodes": [{"id": "l1"}, {"id": "l2"}]}}
+        })
+        assert c._get_issue_label_ids("i1") == ["l1", "l2"]
+
+    def test_returns_empty_list_when_no_labels(self, client):
+        c, http = client
+        http.post.return_value = make_response({
+            "issue": {"labels": {"nodes": []}}
+        })
+        assert c._get_issue_label_ids("i1") == []
+
+    def test_not_found_raises(self, client):
+        c, http = client
+        http.post.return_value = make_response({"issue": None})
+        with pytest.raises(LinearError, match="not found"):
+            c._get_issue_label_ids("bad-id")
+
+    def test_uses_narrow_query_without_comments_or_description(self, client):
+        """Must not fetch the full issue (with 50 comments) just to read label IDs."""
+        c, http = client
+        http.post.return_value = make_response({
+            "issue": {"labels": {"nodes": []}}
+        })
+        c._get_issue_label_ids("i1")
+        query = http.post.call_args[1]["json"]["query"]
+        assert "labels" in query
+        assert "comments" not in query
+        assert "description" not in query
+
+
 # ── Label helpers ─────────────────────────────────────────────────────────────
 
 class TestAddRemoveLabels:
-    def _issue_resp(self, label_ids: list[str]) -> MagicMock:
+    def _labels_resp(self, label_ids: list[str]) -> MagicMock:
+        """Narrow response matching what _get_issue_label_ids expects."""
         return make_response({
-            "issue": _full_issue_stub(labels={"nodes": [{"id": lid} for lid in label_ids]})
+            "issue": {"labels": {"nodes": [{"id": lid} for lid in label_ids]}}
         })
 
     def _update_resp(self) -> MagicMock:
@@ -729,21 +808,21 @@ class TestAddRemoveLabels:
 
     def test_add_labels_merges_with_existing(self, client):
         c, http = client
-        http.post.side_effect = [self._issue_resp(["l1"]), self._update_resp()]
+        http.post.side_effect = [self._labels_resp(["l1"]), self._update_resp()]
         c.add_labels("i1", ["l2"])
         update_payload = http.post.call_args_list[1][1]["json"]
         assert set(update_payload["variables"]["input"]["labelIds"]) == {"l1", "l2"}
 
     def test_add_labels_deduplicates(self, client):
         c, http = client
-        http.post.side_effect = [self._issue_resp(["l1"]), self._update_resp()]
+        http.post.side_effect = [self._labels_resp(["l1"]), self._update_resp()]
         c.add_labels("i1", ["l1"])
         update_payload = http.post.call_args_list[1][1]["json"]
         assert update_payload["variables"]["input"]["labelIds"] == ["l1"]
 
     def test_remove_labels_keeps_others(self, client):
         c, http = client
-        http.post.side_effect = [self._issue_resp(["l1", "l2", "l3"]), self._update_resp()]
+        http.post.side_effect = [self._labels_resp(["l1", "l2", "l3"]), self._update_resp()]
         c.remove_labels("i1", ["l2"])
         update_payload = http.post.call_args_list[1][1]["json"]
         remaining = update_payload["variables"]["input"]["labelIds"]
@@ -752,7 +831,7 @@ class TestAddRemoveLabels:
     def test_remove_nonexistent_label_is_no_op(self, client):
         """Removing a label ID not on the issue silently leaves everything else intact."""
         c, http = client
-        http.post.side_effect = [self._issue_resp(["l1", "l2"]), self._update_resp()]
+        http.post.side_effect = [self._labels_resp(["l1", "l2"]), self._update_resp()]
         c.remove_labels("i1", ["l-nonexistent"])
         update_payload = http.post.call_args_list[1][1]["json"]
         assert set(update_payload["variables"]["input"]["labelIds"]) == {"l1", "l2"}
@@ -783,6 +862,37 @@ class TestBulkUpdateIssues:
         c.bulk_update_issues(["i1", "i2"], state_id="state-xyz")
         for call in http.post.call_args_list:
             assert call[1]["json"]["variables"]["input"]["stateId"] == "state-xyz"
+
+    def test_due_date_passed_to_each_issue(self, client):
+        c, http = client
+        http.post.return_value = make_response(
+            {"issueUpdate": {"success": True, "issue": _issue_stub()}}
+        )
+        c.bulk_update_issues(["i1", "i2"], due_date="2026-09-01")
+        for call in http.post.call_args_list:
+            assert call[1]["json"]["variables"]["input"]["dueDate"] == "2026-09-01"
+
+    def test_multiple_fields_sent_together(self, client):
+        c, http = client
+        http.post.return_value = make_response(
+            {"issueUpdate": {"success": True, "issue": _issue_stub()}}
+        )
+        c.bulk_update_issues(["i1"], state_id="s1", priority=2)
+        payload = http.post.call_args[1]["json"]
+        assert payload["variables"]["input"]["stateId"] == "s1"
+        assert payload["variables"]["input"]["priority"] == 2
+
+    def test_unrelated_fields_not_included(self, client):
+        """Fields not passed must not appear in each issue's update payload."""
+        c, http = client
+        http.post.return_value = make_response(
+            {"issueUpdate": {"success": True, "issue": _issue_stub()}}
+        )
+        c.bulk_update_issues(["i1"], priority=1)
+        payload = http.post.call_args[1]["json"]["variables"]["input"]
+        assert "stateId" not in payload
+        assert "assigneeId" not in payload
+        assert "dueDate" not in payload
 
 
 # ── Notifications ─────────────────────────────────────────────────────────────
