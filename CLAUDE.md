@@ -46,7 +46,7 @@ The server runs on stdio transport. Any plain text written to stdout corrupts th
 Always pass user-supplied values through the `variables` dict argument to `_query()`. Never interpolate them into the query string with f-strings — this was the original injection bug.
 
 **5. Use `_update_issue_fields` when setting a field to null.**  
-`update_issue()` skips `None` parameters (treating them as "don't change this field"). To explicitly null a field (e.g., unassign, clear due date, remove from cycle), use `_update_issue_fields(issue_id, {"fieldName": None})` directly — it sends the value as JSON `null`.
+`update_issue()` skips `None` parameters (treating them as "don't change this field"). To explicitly null a field (e.g., unassign, clear due date, remove from cycle, un-nest from parent), use `_update_issue_fields(issue_id, {"fieldName": None})` directly — it sends the value as JSON `null`. For example, to remove a parent: `_update_issue_fields(issue_id, {"parentId": None})`. Passing `parent_id=None` to `update_issue` does nothing.
 
 ## Adding a new tool
 
