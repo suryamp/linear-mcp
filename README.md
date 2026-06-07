@@ -7,6 +7,8 @@ Show me all In Progress issues for the engineering team
 Create a high priority bug called "Login timeout on mobile"
 Move ENG-42 to Done and add a comment explaining the fix
 Assign all unassigned issues in the backlog to me
+Add the "blocked" label to ENG-55 without removing its other labels
+Create a sub-issue under ENG-10 for the auth redesign
 ```
 
 ## Requirements
@@ -29,7 +31,11 @@ claude mcp add linear \
 
 ```bash
 pip install git+https://github.com/suryamp/linear-mcp
-claude mcp add linear -e LINEAR_API_KEY=lin_api_your_key_here -- linear-mcp
+
+# Use the full path to the installed script to avoid PATH issues:
+claude mcp add linear \
+  -e LINEAR_API_KEY=lin_api_your_key_here \
+  -- "$(python -m site --user-base)/bin/linear-mcp"
 ```
 
 ### Option C — clone and run locally
@@ -41,7 +47,7 @@ python -m venv .venv && source .venv/bin/activate
 pip install -e .
 claude mcp add linear \
   -e LINEAR_API_KEY=lin_api_your_key_here \
-  -- /path/to/linear-mcp/.venv/bin/python -m linear_mcp.server
+  -- /path/to/linear-mcp/.venv/bin/linear-mcp
 ```
 
 ## Getting your Linear API key
@@ -55,17 +61,33 @@ claude mcp add linear \
 | Tool | Description |
 |---|---|
 | `get_viewer` | Get your user profile |
-| `list_teams` | List all teams with IDs |
+| `list_teams` | List all teams with IDs and keys |
 | `list_members` | List team members (for assigning issues) |
 | `list_workflow_states` | List states like Todo / In Progress / Done |
-| `list_issues` | List issues, filtered by team / assignee / state |
-| `get_issue` | Get full issue details including comments |
+| `list_issues` | List issues, filtered by team / assignee / state / priority / label / date |
+| `get_issue` | Get full issue details including comments and parent |
 | `search_issues` | Full-text search across all issues |
-| `create_issue` | Create a new issue |
-| `update_issue` | Update title, description, state, assignee, priority |
-| `delete_issue` | Permanently delete an issue |
+| `create_issue` | Create a new issue (supports sub-issues via `parent_id`, due dates) |
+| `update_issue` | Update title, description, state, assignee, priority, due date |
+| `unassign_issue` | Remove the assignee from an issue |
+| `add_labels` | Add labels to an issue without removing existing ones |
+| `remove_labels` | Remove specific labels, leaving others intact |
+| `bulk_update_issues` | Apply the same state/assignee/priority to multiple issues at once |
+| `create_issue_relation` | Link two issues (blocks, duplicate, related, etc.) |
+| `delete_issue_relation` | Remove a relation between two issues |
+| `archive_issue` | Archive an issue (reversible) |
+| `delete_issue` | Permanently delete an issue (requires `confirm=True`) |
 | `add_comment` | Add a comment to an issue |
-| `list_projects` | List projects |
+| `list_projects` | List projects, optionally filtered by team |
+| `list_labels` | List labels, optionally filtered by team |
+| `list_cycles` | List cycles (sprints) for a team |
+| `get_current_cycle` | Get the currently active sprint for a team |
+| `add_issue_to_cycle` | Add an issue to a sprint |
+| `remove_issue_from_cycle` | Remove an issue from its current sprint |
+| `list_notifications` | List your recent Linear notifications |
+| `mark_notification_read` | Mark a notification as read |
+
+> **Label tip:** `update_issue(label_ids=...)` **replaces all labels**. Use `add_labels` / `remove_labels` to add or remove individual labels without clobbering the rest.
 
 ## Example prompts
 
@@ -73,9 +95,12 @@ claude mcp add linear \
 What teams do I have in Linear?
 Show me everything assigned to me that's In Progress
 Create a medium priority issue called "Update onboarding docs" in the ENG team
-Move all Done issues from last week to Cancelled
-Add a comment to ENG-88 saying "Blocked on design review"
+Create a sub-issue under ENG-10 titled "Write migration script"
+Move ENG-42 to Done and add a comment explaining the fix
+Add a "needs-design" label to ENG-55 without removing its other labels
 Who's on the mobile team?
+What's the current sprint for the ENG team?
+Add ENG-42 to the current sprint
 ```
 
 ## License
