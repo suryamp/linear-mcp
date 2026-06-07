@@ -512,6 +512,24 @@ class TestUpdateIssue:
         payload = http.post.call_args[1]["json"]
         assert "dueDate" not in payload["variables"]["input"]
 
+    def test_parent_id_in_input(self, client):
+        c, http = client
+        http.post.return_value = make_response(
+            {"issueUpdate": {"success": True, "issue": _issue_stub()}}
+        )
+        c.update_issue("i1", parent_id="BUILD-12")
+        payload = http.post.call_args[1]["json"]
+        assert payload["variables"]["input"]["parentId"] == "BUILD-12"
+
+    def test_parent_id_none_omits_field(self, client):
+        c, http = client
+        http.post.return_value = make_response(
+            {"issueUpdate": {"success": True, "issue": _issue_stub()}}
+        )
+        c.update_issue("i1", title="X")
+        payload = http.post.call_args[1]["json"]
+        assert "parentId" not in payload["variables"]["input"]
+
     def test_raises_on_success_false(self, client):
         c, http = client
         http.post.return_value = make_response({"issueUpdate": {"success": False, "issue": None}})

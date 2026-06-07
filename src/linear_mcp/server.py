@@ -207,6 +207,7 @@ def update_issue(
     priority: int | None = None,
     label_ids: list[str] | None = None,
     due_date: str | None = None,
+    parent_id: str | None = None,
 ) -> dict:
     """Update fields on an existing issue. Only pass fields you want to change.
     To remove the assignee entirely, use unassign_issue instead.
@@ -223,11 +224,12 @@ def update_issue(
         label_ids: Replace ALL labels with these UUIDs. Use add_labels or remove_labels
                    to add/remove individual labels without losing others.
         due_date: Due date in YYYY-MM-DD format, e.g. '2026-06-30'. Pass empty string to clear.
+        parent_id: Move issue under a parent (sub-issue). UUID or identifier like 'ENG-42'.
     """
     return _client().update_issue(
         issue_id=issue_id, title=title, description=description,
         state_id=state_id, assignee_id=assignee_id, priority=priority,
-        label_ids=label_ids, due_date=due_date,
+        label_ids=label_ids, due_date=due_date, parent_id=parent_id,
     )
 
 

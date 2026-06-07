@@ -313,6 +313,7 @@ class LinearClient:
         label_ids: list[str] | None = None,
         cycle_id: str | None = None,
         due_date: str | None = None,
+        parent_id: str | None = None,
     ) -> dict:
         input_data: dict = {}
         if title is not None:
@@ -331,6 +332,8 @@ class LinearClient:
             input_data["cycleId"] = cycle_id
         if due_date is not None:
             input_data["dueDate"] = due_date if due_date else None
+        if parent_id is not None:
+            input_data["parentId"] = parent_id
 
         if not input_data:
             raise ValueError("update_issue called with no fields to update")
