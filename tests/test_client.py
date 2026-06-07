@@ -6,7 +6,6 @@ import pytest
 
 from linear_mcp.client import LinearClient, LinearError
 
-
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
 def make_response(data: dict, status: int = 200) -> MagicMock:
@@ -476,14 +475,18 @@ class TestUpdateIssue:
 
     def test_cycle_id_in_input(self, client):
         c, http = client
-        http.post.return_value = make_response({"issueUpdate": {"success": True, "issue": _issue_stub()}})
+        http.post.return_value = make_response(
+            {"issueUpdate": {"success": True, "issue": _issue_stub()}}
+        )
         c.update_issue("i1", cycle_id="cycle-99")
         payload = http.post.call_args[1]["json"]
         assert payload["variables"]["input"]["cycleId"] == "cycle-99"
 
     def test_due_date_in_input(self, client):
         c, http = client
-        http.post.return_value = make_response({"issueUpdate": {"success": True, "issue": _issue_stub()}})
+        http.post.return_value = make_response(
+            {"issueUpdate": {"success": True, "issue": _issue_stub()}}
+        )
         c.update_issue("i1", due_date="2026-07-01")
         payload = http.post.call_args[1]["json"]
         assert payload["variables"]["input"]["dueDate"] == "2026-07-01"
@@ -491,7 +494,9 @@ class TestUpdateIssue:
     def test_due_date_empty_string_sends_null(self, client):
         """due_date='' must send dueDate: null to clear the field, not skip it."""
         c, http = client
-        http.post.return_value = make_response({"issueUpdate": {"success": True, "issue": _issue_stub()}})
+        http.post.return_value = make_response(
+            {"issueUpdate": {"success": True, "issue": _issue_stub()}}
+        )
         c.update_issue("i1", due_date="")
         payload = http.post.call_args[1]["json"]
         assert "dueDate" in payload["variables"]["input"]
@@ -500,7 +505,9 @@ class TestUpdateIssue:
     def test_due_date_none_omits_field(self, client):
         """due_date=None (the default) must leave dueDate out of the payload entirely."""
         c, http = client
-        http.post.return_value = make_response({"issueUpdate": {"success": True, "issue": _issue_stub()}})
+        http.post.return_value = make_response(
+            {"issueUpdate": {"success": True, "issue": _issue_stub()}}
+        )
         c.update_issue("i1", title="X")
         payload = http.post.call_args[1]["json"]
         assert "dueDate" not in payload["variables"]["input"]
@@ -518,7 +525,9 @@ class TestUpdateIssueFields:
     def test_none_value_sent_as_null(self, client):
         """_update_issue_fields must include None in the payload (maps to JSON null)."""
         c, http = client
-        http.post.return_value = make_response({"issueUpdate": {"success": True, "issue": _issue_stub()}})
+        http.post.return_value = make_response(
+            {"issueUpdate": {"success": True, "issue": _issue_stub()}}
+        )
         c._update_issue_fields("i1", {"assigneeId": None})
         payload = http.post.call_args[1]["json"]
         assert "assigneeId" in payload["variables"]["input"]
@@ -535,7 +544,9 @@ class TestUpdateIssueFields:
 class TestUnassignIssue:
     def test_sends_assignee_id_null(self, client):
         c, http = client
-        http.post.return_value = make_response({"issueUpdate": {"success": True, "issue": _issue_stub()}})
+        http.post.return_value = make_response(
+            {"issueUpdate": {"success": True, "issue": _issue_stub()}}
+        )
         c.unassign_issue("i1")
         payload = http.post.call_args[1]["json"]
         assert payload["variables"]["input"] == {"assigneeId": None}
@@ -562,7 +573,10 @@ class TestDeleteIssue:
 class TestIssueRelations:
     def test_create_relation_success(self, client):
         c, http = client
-        relation = {"id": "r1", "type": "blocks", "relatedIssue": {"id": "i2", "identifier": "ENG-2", "title": "Other"}}
+        relation = {
+            "id": "r1", "type": "blocks",
+            "relatedIssue": {"id": "i2", "identifier": "ENG-2", "title": "Other"},
+        }
         http.post.return_value = make_response(
             {"issueRelationCreate": {"success": True, "issueRelation": relation}}
         )
@@ -586,7 +600,10 @@ class TestIssueRelations:
 
     def test_relation_type_is_passed_through(self, client):
         c, http = client
-        relation = {"id": "r1", "type": "duplicate", "relatedIssue": {"id": "i2", "identifier": "ENG-2", "title": "Dup"}}
+        relation = {
+            "id": "r1", "type": "duplicate",
+            "relatedIssue": {"id": "i2", "identifier": "ENG-2", "title": "Dup"},
+        }
         http.post.return_value = make_response(
             {"issueRelationCreate": {"success": True, "issueRelation": relation}}
         )
@@ -632,19 +649,25 @@ class TestAddComment:
 # ── Projects ──────────────────────────────────────────────────────────────────
 
 class TestListProjects:
-    def test_no_filter_sends_null(self, client):
+    def test_no_filter_returns_all_projects(self, client):
         c, http = client
-        http.post.return_value = make_response({"projects": {"nodes": []}})
-        c.list_projects()
-        payload = http.post.call_args[1]["json"]
-        assert payload["variables"]["filter"] is None
+        projects = [
+            {"id": "p1", "name": "Alpha", "teams": {"nodes": [{"id": "t1", "name": "eng", "key": "ENG"}]}},  # noqa: E501
+        ]
+        http.post.return_value = make_response({"projects": {"nodes": projects}})
+        result = c.list_projects()
+        assert result == projects
 
-    def test_team_filter_uses_variable(self, client):
+    def test_team_filter_filters_client_side(self, client):
         c, http = client
-        http.post.return_value = make_response({"projects": {"nodes": []}})
-        c.list_projects(team_id="team-xyz")
-        payload = http.post.call_args[1]["json"]
-        assert payload["variables"]["filter"] == {"teams": {"id": {"eq": "team-xyz"}}}
+        projects = [
+            {"id": "p1", "name": "Match", "teams": {"nodes": [{"id": "team-xyz", "name": "x", "key": "X"}]}},  # noqa: E501
+            {"id": "p2", "name": "No match", "teams": {"nodes": [{"id": "other", "name": "y", "key": "Y"}]}},  # noqa: E501
+        ]
+        http.post.return_value = make_response({"projects": {"nodes": projects}})
+        result = c.list_projects(team_id="team-xyz")
+        assert len(result) == 1
+        assert result[0]["id"] == "p1"
 
 
 # ── Labels ────────────────────────────────────────────────────────────────────
@@ -760,30 +783,36 @@ class TestGetCurrentCycle:
 # ── Cycle membership ──────────────────────────────────────────────────────────
 
 class TestAddIssueToCycle:
-    def test_uses_cycle_issue_create_mutation(self, client):
+    def test_sets_cycle_id_via_issue_update(self, client):
         c, http = client
         http.post.return_value = make_response(
-            {"cycleIssueCreate": {"success": True, "cycleIssue": {"id": "ci1"}}}
+            {"issueUpdate": {"success": True, "issue": {"id": "i1", "identifier": "ENG-1",
+             "title": "T", "priority": 0, "dueDate": None,
+             "state": {"name": "Backlog"}, "assignee": None, "labels": {"nodes": []}}}}
         )
-        result = c.add_issue_to_cycle("i1", "cycle-99")
+        c.add_issue_to_cycle("i1", "cycle-99")
         payload = http.post.call_args[1]["json"]
-        assert "cycleIssueCreate" in payload["query"]
-        assert payload["variables"]["input"] == {"issueId": "i1", "cycleId": "cycle-99"}
-        assert result == {"id": "ci1"}
+        assert "issueUpdate" in payload["query"]
+        assert payload["variables"]["input"] == {"cycleId": "cycle-99"}
 
-    def test_raises_on_success_false(self, client):
+    def test_sends_cycle_id_not_null(self, client):
         c, http = client
         http.post.return_value = make_response(
-            {"cycleIssueCreate": {"success": False, "cycleIssue": None}}
+            {"issueUpdate": {"success": True, "issue": {"id": "i1", "identifier": "ENG-1",
+             "title": "T", "priority": 0, "dueDate": None,
+             "state": {"name": "Backlog"}, "assignee": None, "labels": {"nodes": []}}}}
         )
-        with pytest.raises(LinearError, match="success=false"):
-            c.add_issue_to_cycle("i1", "cycle-99")
+        c.add_issue_to_cycle("i1", "cycle-abc")
+        payload = http.post.call_args[1]["json"]
+        assert payload["variables"]["input"]["cycleId"] == "cycle-abc"
 
 
 class TestRemoveIssueFromCycle:
     def test_sends_cycle_id_null(self, client):
         c, http = client
-        http.post.return_value = make_response({"issueUpdate": {"success": True, "issue": _issue_stub()}})
+        http.post.return_value = make_response(
+            {"issueUpdate": {"success": True, "issue": _issue_stub()}}
+        )
         c.remove_issue_from_cycle("i1")
         payload = http.post.call_args[1]["json"]
         assert "issueUpdate" in payload["query"]
@@ -932,7 +961,9 @@ class TestBulkUpdateIssues:
 class TestListNotifications:
     def test_returns_nodes(self, client):
         c, http = client
-        notifications = [{"id": "n1", "type": "issueAssigned", "readAt": None, "createdAt": "2024-01-01T00:00:00Z"}]
+        notifications = [
+            {"id": "n1", "type": "issueAssigned", "readAt": None, "createdAt": "2024-01-01T00:00:00Z"},  # noqa: E501
+        ]
         http.post.return_value = make_response({"notifications": {"nodes": notifications}})
         result = c.list_notifications()
         assert result == notifications
@@ -980,7 +1011,7 @@ class TestTransitionIssue:
         c, http = client
         http.post.side_effect = [
             _states_resp("Todo", "In Progress", "Done"),
-            make_response({"issueUpdate": {"success": True, "issue": _issue_stub(state={"name": "In Progress"})}}),
+            make_response({"issueUpdate": {"success": True, "issue": _issue_stub(state={"name": "In Progress"})}}),  # noqa: E501
         ]
         result = c.transition_issue("i1", "In Progress", team_id="team-1")
         assert result["state"]["name"] == "In Progress"

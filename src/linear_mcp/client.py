@@ -109,7 +109,7 @@ class LinearClient:
 
     def list_members(self, team_id: str) -> list[dict]:
         data = self._query("""
-            query($teamId: ID!) {
+            query($teamId: String!) {
                 team(id: $teamId) {
                     members(first: 500) {
                         nodes { id name email displayName }
@@ -419,21 +419,23 @@ class LinearClient:
     # ── Projects ──────────────────────────────────────────────────────────────
 
     def list_projects(self, team_id: str | None = None, limit: int = 50) -> list[dict]:
-        filter_obj: dict = {}
-        if team_id:
-            filter_obj["teams"] = {"id": {"eq": team_id}}
-
         data = self._query("""
-            query($filter: ProjectFilter, $first: Int!) {
-                projects(filter: $filter, first: $first) {
+            query($first: Int!) {
+                projects(first: $first) {
                     nodes {
                         id name description state
-                        teams { nodes { name key } }
+                        teams { nodes { id name key } }
                     }
                 }
             }
-        """, {"filter": filter_obj or None, "first": limit})
-        return data["projects"]["nodes"]
+        """, {"first": limit})
+        projects = data["projects"]["nodes"]
+        if team_id:
+            projects = [
+                p for p in projects
+                if any(t["id"] == team_id for t in p.get("teams", {}).get("nodes", []))
+            ]
+        return projects
 
     # ── Labels ────────────────────────────────────────────────────────────────
 
@@ -461,12 +463,11 @@ class LinearClient:
 
     def list_cycles(self, team_id: str, limit: int = 20) -> list[dict]:
         data = self._query("""
-            query($teamId: ID!, $first: Int!) {
+            query($teamId: String!, $first: Int!) {
                 team(id: $teamId) {
                     cycles(first: $first) {
                         nodes {
                             id number name startsAt endsAt completedAt
-                            issues { totalCount }
                         }
                     }
                 }
@@ -493,17 +494,7 @@ class LinearClient:
         return None
 
     def add_issue_to_cycle(self, issue_id: str, cycle_id: str) -> dict:
-        data = self._query("""
-            mutation($input: CycleIssueCreateInput!) {
-                cycleIssueCreate(input: $input) {
-                    success
-                    cycleIssue { id }
-                }
-            }
-        """, {"input": {"issueId": issue_id, "cycleId": cycle_id}})
-        if not data["cycleIssueCreate"]["success"]:
-            raise LinearError("cycleIssueCreate returned success=false")
-        return data["cycleIssueCreate"]["cycleIssue"]
+        return self._update_issue_fields(issue_id, {"cycleId": cycle_id})
 
     def remove_issue_from_cycle(self, issue_id: str) -> dict:
         """Remove an issue from its current cycle (sets cycleId to null)."""
@@ -524,7 +515,7 @@ class LinearClient:
 
     def add_labels(self, issue_id: str, label_ids: list[str]) -> dict:
         """Append labels to an issue without removing existing ones.
-        Uses read-modify-write — a concurrent label update between the read and write will be lost."""
+        Uses read-modify-write — concurrent label updates will be lost."""
         existing = self._get_issue_label_ids(issue_id)
         merged = list(dict.fromkeys(existing + label_ids))  # dedup, preserve order
         return self.update_issue(issue_id, label_ids=merged)

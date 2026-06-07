@@ -1,5 +1,7 @@
 # linear-mcp
 
+[![CI](https://github.com/suryamp/linear-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/suryamp/linear-mcp/actions/workflows/ci.yml)
+
 A [Model Context Protocol](https://modelcontextprotocol.io) server that connects Claude Code to your Linear workspace. Give Claude natural-language instructions and it handles the API calls.
 
 ```

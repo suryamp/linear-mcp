@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "linear": {
+      "command": "/path/to/linear-mcp/.venv/bin/linear-mcp",
+      "args": [],
+      "env": {
+        "LINEAR_API_KEY": "lin_api_your_key_here"
+      }
+    }
+  }
+}

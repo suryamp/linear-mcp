@@ -1,0 +1,96 @@
+name: Refresh Linear schema snapshot
+
+on:
+  schedule:
+    - cron: '0 6 * * *'  # 06:00 UTC daily
+  workflow_dispatch:       # allow manual trigger from the Actions tab
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v4
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: uv sync --extra dev
+
+      - name: Fetch latest Linear schema
+        env:
+          LINEAR_API_KEY: ${{ secrets.LINEAR_API_KEY }}
+        run: uv run python scripts/fetch_schema.py
+
+      - name: Check for schema changes
+        id: changed
+        run: |
+          if git diff --quiet tests/linear_schema.json; then
+            echo "result=unchanged" >> $GITHUB_OUTPUT
+            echo "No schema changes detected — nothing to do."
+          else
+            echo "result=changed" >> $GITHUB_OUTPUT
+            echo "Schema changed:"
+            git diff --stat tests/linear_schema.json
+          fi
+
+      - name: Validate existing queries against new schema
+        if: steps.changed.outputs.result == 'changed'
+        id: validate
+        # continue-on-error so the PR is still opened even when queries break —
+        # the PR body flags the failure so the developer knows to fix client.py.
+        continue-on-error: true
+        run: |
+          uv run python -m pytest tests/test_schema_validation.py -v --tb=short \
+            2>&1 | tee /tmp/validation.txt
+          echo "exit_code=${PIPESTATUS[0]}" >> $GITHUB_OUTPUT
+
+      - name: Build PR body
+        if: steps.changed.outputs.result == 'changed'
+        run: |
+          if [ "${{ steps.validate.outputs.exit_code }}" = "0" ]; then
+            STATUS="✅ All queries still valid — safe to merge."
+          else
+            STATUS="❌ One or more queries broke. Update \`client.py\` before merging (see validation output below)."
+          fi
+
+          cat > /tmp/pr_body.md << EOF
+          Linear's GraphQL schema has changed. This PR updates \`tests/linear_schema.json\`.
+
+          **Query validation:** ${STATUS}
+
+          <details>
+          <summary>Validation output</summary>
+
+          \`\`\`
+          $(cat /tmp/validation.txt)
+          \`\`\`
+
+          </details>
+
+          To inspect what changed in Linear's API:
+          \`\`\`sh
+          git diff origin/main tests/linear_schema.json | grep '^[+-].*"name"' | sort
+          \`\`\`
+
+          To refresh the snapshot locally:
+          \`\`\`sh
+          uv run python scripts/fetch_schema.py
+          \`\`\`
+          EOF
+
+      - name: Open or update PR
+        if: steps.changed.outputs.result == 'changed'
+        uses: peter-evans/create-pull-request@v6
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          branch: chore/refresh-linear-schema
+          commit-message: "chore: refresh Linear GraphQL schema snapshot"
+          title: "chore: refresh Linear schema snapshot"
+          body-path: /tmp/pr_body.md
+          labels: "dependencies"

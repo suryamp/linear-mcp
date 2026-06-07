@@ -239,7 +239,7 @@ def transition_issue(issue_id: str, state_name: str, team_id: str | None = None)
     Args:
         issue_id: Issue UUID or identifier like 'ENG-42'.
         state_name: Workflow state name, e.g. 'In Progress'. Case-insensitive.
-        team_id: Team UUID (use list_teams to find it). Optional — fetched from the issue if omitted.
+        team_id: Team UUID (use list_teams to find it). Optional — fetched from issue if omitted.
     """
     return _client().transition_issue(issue_id, state_name, team_id)
 
@@ -426,7 +426,9 @@ def get_current_cycle(team_id: str) -> dict:
         team_id: Team UUID (use list_teams to find it).
     """
     cycle = _client().get_current_cycle(team_id)
-    return cycle if cycle is not None else {"active": False, "message": "No active cycle for this team"}
+    if cycle is not None:
+        return cycle
+    return {"active": False, "message": "No active cycle for this team"}
 
 
 @mcp.tool()
