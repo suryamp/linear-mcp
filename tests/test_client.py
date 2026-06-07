@@ -338,6 +338,38 @@ class TestGetIssue:
         assert "relations" in query
 
 
+# ── Search issues ────────────────────────────────────────────────────────────
+
+class TestSearchIssues:
+    def _search_response(self) -> MagicMock:
+        nodes = [{"id": "i1", "identifier": "ENG-1", "title": "Login bug"}]
+        return make_response({"issues": {"nodes": nodes}})
+
+    def test_returns_matching_issues(self, client):
+        c, http = client
+        http.post.return_value = self._search_response()
+        result = c.search_issues("Login")
+        assert result[0]["title"] == "Login bug"
+
+    def test_uses_issues_query_not_deprecated_issueSearch(self, client):
+        c, http = client
+        http.post.return_value = self._search_response()
+        c.search_issues("Login")
+        query = http.post.call_args[1]["json"]["query"]
+        assert "issueSearch" not in query
+        assert "issues" in query
+
+    def test_filter_uses_or_across_title_and_description(self, client):
+        c, http = client
+        http.post.return_value = self._search_response()
+        c.search_issues("Login")
+        variables = http.post.call_args[1]["json"]["variables"]
+        conditions = variables["filter"]["or"]
+        keys = {list(c.keys())[0] for c in conditions}
+        assert "title" in keys
+        assert "description" in keys
+
+
 # ── Members ───────────────────────────────────────────────────────────────────
 
 class TestListMembers:

@@ -210,8 +210,8 @@ class LinearClient:
 
     def search_issues(self, query: str, limit: int = 25) -> list[dict]:
         data = self._query("""
-            query($term: String!, $limit: Int!) {
-                issueSearch(query: $term, first: $limit) {
+            query($filter: IssueFilter, $limit: Int!) {
+                issues(filter: $filter, first: $limit, orderBy: updatedAt) {
                     nodes {
                         id identifier title priority description dueDate
                         state    { name }
@@ -222,8 +222,14 @@ class LinearClient:
                     }
                 }
             }
-        """, {"term": query, "limit": limit})
-        return data["issueSearch"]["nodes"]
+        """, {
+            "filter": {"or": [
+                {"title": {"containsIgnoreCase": query}},
+                {"description": {"containsIgnoreCase": query}},
+            ]},
+            "limit": limit,
+        })
+        return data["issues"]["nodes"]
 
     def create_issue(
         self,
