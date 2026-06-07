@@ -55,6 +55,34 @@ Always pass user-supplied values through the `variables` dict argument to `_quer
 3. Use `$filter: SomeFilter` variables (not hardcoded literals) when the query supports filtering.
 4. Add unit tests in `tests/test_client.py` — mock `http.post` via the `client` fixture.
 
+**Tool docstrings are agent instructions, not API docs.**  
+Write them as LLM tool-selection guidance: lead with *when* to use the tool, include cross-tool hints so the model can chain calls, and surface non-obvious behaviour. Example: `"Use this to look up user IDs before assigning issues"` is correct. `"Returns a list of team members"` is not.
+
+**Destructive tools require a `confirm` guard.**  
+Any tool that permanently deletes or irreversibly modifies data must accept `confirm: bool = False` and return a warning dict (not raise) when `confirm` is `False`. See `delete_issue` in `server.py` for the pattern. This prevents agent misfires.
+
+## Known limitations
+
+These are intentional gaps, not bugs. Fix them correctly — don't work around them by raising hardcoded limits.
+
+**Pagination not implemented.**  
+`list_issues`, `search_issues`, and `list_notifications` cap results with `first: N`. There is no cursor support yet. An agent silently sees a truncated slice with no indication that more results exist. The correct fix is to add `cursor: str | None = None` parameters and return `pageInfo { hasNextPage endCursor }` alongside nodes. Tracked in BUILD-9.
+
+**No `list_sub_issues` tool.**  
+`get_issue` returns a `parent` field but there is no tool to enumerate children. Linear's API exposes this via the `children` connection on `Issue`. Tracked in BUILD-10.
+
+**`list_projects` filters by team client-side.**  
+Python post-processes the full project list to filter by `team_id`. This is a Linear API limitation — the `projects` query does not expose a server-side team filter. Do not add a `$filter` variable; it won't work.
+
+**`bulk_update_issues` is sequential.**  
+Issues are updated one mutation at a time. This is intentional — parallel mutations on the same resource risk race conditions. Do not add concurrency here.
+
+## CI workflows
+
+`.github/workflows/ci.yml` — runs lint + tests across Python 3.10–3.14 on every push/PR.
+
+`.github/workflows/refresh-schema.yml` — runs daily at 06:00 UTC. Introspects the live Linear GraphQL API, diffs `tests/linear_schema.json`, runs `tests/test_schema_validation.py` against the new schema, and opens a PR if anything changed. The PR body includes the validation output so you can see immediately whether `client.py` needs updates. Requires `LINEAR_API_KEY` set as a repository secret.
+
 ## Code style
 
 - Ruff: line-length 100, selects E/F/W/I. No auto-formatter (ruff lint only).
