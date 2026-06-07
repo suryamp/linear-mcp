@@ -97,7 +97,7 @@ def list_workflow_states(team_id: str) -> list:
 # ── Issues ────────────────────────────────────────────────────────────────────
 
 @mcp.tool()
-def get_my_issues(state: str = None, limit: int = 25) -> list:
+def get_my_issues(state: str | None = None, limit: int = 25) -> list:
     """Get issues assigned to you — the fastest way to see your current workload.
 
     Args:
@@ -109,12 +109,12 @@ def get_my_issues(state: str = None, limit: int = 25) -> list:
 
 @mcp.tool()
 def list_issues(
-    team_id: str = None,
-    assignee_id: str = None,
-    state: str = None,
-    priority: int = None,
-    label_name: str = None,
-    updated_after: str = None,
+    team_id: str | None = None,
+    assignee_id: str | None = None,
+    state: str | None = None,
+    priority: int | None = None,
+    label_name: str | None = None,
+    updated_after: str | None = None,
     limit: int = 25,
 ) -> list:
     """List issues sorted by last-updated. All filters are optional and composable.
@@ -166,14 +166,14 @@ def search_issues(query: str, limit: int = 25) -> list:
 def create_issue(
     team_id: str,
     title: str,
-    description: str = None,
-    assignee_id: str = None,
-    priority: int = None,
-    state_id: str = None,
-    project_id: str = None,
-    label_ids: list[str] = None,
-    parent_id: str = None,
-    due_date: str = None,
+    description: str | None = None,
+    assignee_id: str | None = None,
+    priority: int | None = None,
+    state_id: str | None = None,
+    project_id: str | None = None,
+    label_ids: list[str] | None = None,
+    parent_id: str | None = None,
+    due_date: str | None = None,
 ) -> dict:
     """Create a new Linear issue. Optionally nest it under a parent issue (sub-issue).
 
@@ -200,13 +200,13 @@ def create_issue(
 @mcp.tool()
 def update_issue(
     issue_id: str,
-    title: str = None,
-    description: str = None,
-    state_id: str = None,
-    assignee_id: str = None,
-    priority: int = None,
-    label_ids: list[str] = None,
-    due_date: str = None,
+    title: str | None = None,
+    description: str | None = None,
+    state_id: str | None = None,
+    assignee_id: str | None = None,
+    priority: int | None = None,
+    label_ids: list[str] | None = None,
+    due_date: str | None = None,
 ) -> dict:
     """Update fields on an existing issue. Only pass fields you want to change.
     To remove the assignee entirely, use unassign_issue instead.
@@ -232,7 +232,7 @@ def update_issue(
 
 
 @mcp.tool()
-def transition_issue(issue_id: str, state_name: str, team_id: str = None) -> dict:
+def transition_issue(issue_id: str, state_name: str, team_id: str | None = None) -> dict:
     """Move an issue to a named workflow state without needing the state UUID.
     If team_id is omitted it is fetched from the issue automatically (one extra API call).
 
@@ -284,10 +284,10 @@ def remove_labels(issue_id: str, label_ids: list[str]) -> dict:
 @mcp.tool()
 def bulk_update_issues(
     issue_ids: list[str],
-    state_id: str = None,
-    assignee_id: str = None,
-    priority: int = None,
-    due_date: str = None,
+    state_id: str | None = None,
+    assignee_id: str | None = None,
+    priority: int | None = None,
+    due_date: str | None = None,
 ) -> list:
     """Apply the same state/assignee/priority/due-date update to multiple issues at once.
     At least one update field is required. Issues are updated sequentially.
@@ -382,7 +382,7 @@ def add_comment(issue_id: str, body: str) -> dict:
 # ── Projects ──────────────────────────────────────────────────────────────────
 
 @mcp.tool()
-def list_projects(team_id: str = None, limit: int = 50) -> list:
+def list_projects(team_id: str | None = None, limit: int = 50) -> list:
     """List projects, optionally filtered by team.
 
     Args:
@@ -395,7 +395,7 @@ def list_projects(team_id: str = None, limit: int = 50) -> list:
 # ── Labels ────────────────────────────────────────────────────────────────────
 
 @mcp.tool()
-def list_labels(team_id: str = None) -> list:
+def list_labels(team_id: str | None = None) -> list:
     """List issue labels, optionally filtered by team.
 
     Args:
